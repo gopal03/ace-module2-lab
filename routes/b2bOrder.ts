@@ -16,8 +16,11 @@ import * as utils from '../lib/utils'
 export function b2bOrder () {
   return ({ body }: Request, res: Response, next: NextFunction) => {
     if (utils.isChallengeEnabled(challenges.rceChallenge) || utils.isChallengeEnabled(challenges.rceOccupyChallenge)) {
-      const orderLinesData = body.orderLinesData || ''
+      const orderLinesData = typeof body.orderLinesData === 'string' ? body.orderLinesData : ''
       try {
+        if (!isSafeInput(orderLinesData)) {
+          throw new Error('Unsafe input detected')
+        }
         const sandbox = { safeEval, orderLinesData }
         vm.createContext(sandbox)
         vm.runInContext('safeEval(orderLinesData)', sandbox, { timeout: 2000 })
@@ -35,6 +38,30 @@ export function b2bOrder () {
     } else {
       res.json({ cid: body.cid, orderNo: uniqueOrderNumber(), paymentDue: dateTwoWeeksFromNow() })
     }
+  }
+
+  function isSafeInput (code: string): boolean {
+    if (code.includes('\\')) {
+      return false
+    }
+    if (code.includes("'") || code.includes('"') || code.includes('`')) {
+      return false
+    }
+    if (code.includes('[') || code.includes(']')) {
+      return false
+    }
+    const cleanComments = code.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '')
+    const normalized = cleanComments.replace(/\s+/g, '').toLowerCase()
+    const dangerous = [
+      'constructor', 'prototype', '__proto__', 'process', 'global',
+      'require', 'child_process', 'exec', 'spawn', 'mainmodule', 'eval', 'this'
+    ]
+    for (const keyword of dangerous) {
+      if (normalized.includes(keyword)) {
+        return false
+      }
+    }
+    return true
   }
 
   function uniqueOrderNumber () {

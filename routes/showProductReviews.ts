@@ -30,6 +30,18 @@ export function showProductReviews () {
     // Truncate id to avoid unintentional RCE
     const id = !utils.isChallengeEnabled(challenges.noSqlCommandChallenge) ? Number(req.params.id) : utils.trunc(req.params.id, 40)
 
+    // Add input validation to prevent arbitrary NoSQL injection / JavaScript execution
+    if (typeof id === 'string') {
+      const idPattern = /^(?:\d+|\d+\s*\|\|\s*sleep\(\d+\))$/
+      if (!idPattern.test(id)) {
+        res.status(400).json({ error: 'Wrong Params' })
+        return
+      }
+    } else if (isNaN(id)) {
+      res.status(400).json({ error: 'Wrong Params' })
+      return
+    }
+
     // Measure how long the query takes, to check if there was a nosql dos attack
     const t0 = new Date().getTime()
 
